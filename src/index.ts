@@ -15,20 +15,23 @@ let playing = false;
 let frequencyData: Uint8Array;
 let frequencyDataFloat: Float32Array;
 
-//   function logFrequencyData() {
-//   if (!analyser) return;
+function logFrequencyData() {
+  if (!analyser) return;
 
-//   analyser.getByteFrequencyData(frequencyData);
-//   console.log("Fréquences (0-255) :", frequencyData);
+  analyser.getByteFrequencyData(frequencyData);
+  // console.log("Fréquences (0-255) :", frequencyData);
 
-//   analyser.getFloatFrequencyData(frequencyDataFloat);
-//   console.log("Fréquences (Décibels) :", frequencyDataFloat);
+  analyser.getFloatFrequencyData(frequencyDataFloat);
+  // console.log("Fréquences (Décibels) :", frequencyDataFloat);
 
+  const max = Math.max(...frequencyDataFloat)
 
-// let frameCount = 0;
-//   frameCount++;
-//   if (frameCount % 30 !== 0) return;
-// }
+  const min = Math.min(...frequencyDataFloat)
+
+  console.log(max,min)
+
+  return [max, min];
+}
 
 function createContext() {
   audioContext = new AudioContext();
@@ -49,7 +52,8 @@ function createContext() {
 }
 
 function draw() {
-  const drawVisual = requestAnimationFrame(draw);
+  requestAnimationFrame(draw);
+  const [max, min] = logFrequencyData();
   analyser.getByteFrequencyData(analyserBuffer as Uint8Array<ArrayBuffer>);
   analyser.getByteTimeDomainData(timeData as Uint8Array<ArrayBuffer>);
 
@@ -60,22 +64,27 @@ function draw() {
   canvasContext.strokeStyle = "rgb(0 0 0)";
   canvasContext.beginPath();
 
-  const sliceWidth = canvas.width / bufferLength;
+  // on / 4 parce que y'a pleins de frequences inutilisees, elles sont toutes sur le debut du bucket
+  const zoomedFrequencyBandLength = bufferLength / 32;
+  const sliceWidth = canvas.width / zoomedFrequencyBandLength;
   let x = 0;
-  for (let i = 0; i < bufferLength; i++) {
-    const v = analyserBuffer[i] / 128.0;
-    const y = v * (canvas.height / 2);
+  let initX = 0, initY = 0;
+  for (let i = 0; i < zoomedFrequencyBandLength; i++) {
+    const amplitude = 100 + analyserBuffer[i];
+    const normalizedFreqBand = i / zoomedFrequencyBandLength;
+    const x = Math.cos(normalizedFreqBand * Math.PI * 2) * amplitude + canvas.width / 2;
+    const y = Math.sin(normalizedFreqBand * Math.PI * 2) * amplitude + canvas.height / 2;
 
     if (i === 0) {
       canvasContext.moveTo(x, y);
+      initX = x;
+      initY = y;
     } else {
       canvasContext.lineTo(x, y);
     }
-
-    x += sliceWidth;
   }
 
-  canvasContext.lineTo(canvas.width, canvas.height / 2);
+  canvasContext.lineTo(initX, initY);
   canvasContext.stroke();
 }
 
@@ -94,7 +103,7 @@ button.addEventListener("click", () => {
   if (button.dataset.playing === "false") {
     audioElement.play();
     button.dataset.playing = "true";
-    draw(); 
+    draw();
   } else {
     audioElement.pause();
     button.dataset.playing = "false";
