@@ -1,5 +1,5 @@
 import { Pane } from 'tweakpane'
-import type { Parameters } from './index.canvas'
+import type { Parameters } from './canvas'
 
 export function createGUI(parameters: Parameters) {
     const pane = new Pane()

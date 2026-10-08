@@ -101,7 +101,4 @@ function pause() {
   // }
   frameRequest = undefined;
 }
-
-
-
 })

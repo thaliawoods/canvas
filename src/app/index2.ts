@@ -14,8 +14,6 @@ let bufferLength: number;
 let playing = false;
 let frequencyData: Uint8Array;
 let frequencyDataFloat: Float32Array;
-// pour spin 
-let frame = 0;
 
 // function logFrequencyData() {
 //   if (!analyser) return;
@@ -38,17 +36,7 @@ let frame = 0;
 const PARAMS = {
   size: 50,
   color: '#ffffff',
-  theme: 'dark',
-  lineWidth: 1,    
-  dash: 0,       
-  trail: 1,    
-  fill: false,     
-  fillColor: '#000000',
-  glow: 0,        
-  jitter: 0,    
-  spin: 0,         
-  amplitude: 1,    
-  spread: 500      
+  theme: 'dark'
 };
 
 const pane = new Pane();
@@ -62,48 +50,6 @@ pane.addBinding(
   PARAMS, 'theme',
   {options: {Dark: 'dark', Light: 'light'}}
 );
-
-pane.addBinding(
-  PARAMS, 'lineWidth', {min: 0.2, max: 8, step: 0.1}
-);
-
-pane.addBinding(
-  PARAMS, 'dash', {min: 0, max: 30, step: 1}
-);
-
-pane.addBinding(
-  PARAMS, 'trail', {min: 0.02, max: 1, step: 0.01}
-);
-
-pane.addBinding(
-  PARAMS, 'fill'
-);
-
-pane.addBinding(
-  PARAMS, 'fillColor',
-  {options: {Black: '#000000', White: '#ffffff', Red: '#ff0055', Green: '#00ff55', Blue: '#0055ff'}}
-);
-
-pane.addBinding(
-  PARAMS, 'glow', {min: 0, max: 40, step: 1}
-);
-
-pane.addBinding(
-  PARAMS, 'jitter', {min: 0, max: 15, step: 0.5}
-);
-
-pane.addBinding(
-  PARAMS, 'spin', {min: -2, max: 2, step: 0.01}
-);
-
-pane.addBinding(
-  PARAMS, 'amplitude', {min: 0.2, max: 2, step: 0.01}
-);
-
-pane.addBinding(
-  PARAMS, 'spread', {min: 0, max: 800, step: 10}
-);
-
 
 function createContext() {
   audioContext = new AudioContext();
@@ -125,8 +71,7 @@ function createContext() {
 
 function draw() {
   requestAnimationFrame(draw);
-// pour le spin
-  frame++;
+
 
   const w = window.innerWidth;
   const h = window.innerHeight;
@@ -136,39 +81,28 @@ function draw() {
   analyser.getByteFrequencyData(analyserBuffer as Uint8Array<ArrayBuffer>);
   analyser.getByteTimeDomainData(timeData as Uint8Array<ArrayBuffer>);
 
-  canvasContext.fillStyle = PARAMS.theme === 'dark' ? `rgba(60, 58, 58, ${PARAMS.trail})` : `rgba(250, 246, 246, ${PARAMS.trail})`;
+  canvasContext.fillStyle = PARAMS.theme === 'dark' ? 'rgb(60, 58, 58)' : 'rgb(250, 246, 246)';
 
   canvasContext.fillRect(0, 0, w, h);
 
-  canvasContext.lineWidth = PARAMS.lineWidth;
+  canvasContext.lineWidth = 1;
   canvasContext.strokeStyle = PARAMS.color;
-  canvasContext.setLineDash(PARAMS.dash > 0 ? [PARAMS.dash, PARAMS.dash] : []);
-  canvasContext.shadowBlur = PARAMS.glow;
-  canvasContext.shadowColor = PARAMS.color;
+  canvasContext.beginPath();
 
   // on / 4 parce que y'a pleins de frequences inutilisees, elles sont toutes sur le debut du bucket
   const zoomedFrequencyBandLength = bufferLength / 16;
+  let x = 0;
   // pour avoir la fin du cercle
   let initX: number, initY: number;
-
-  const offset1 = -PARAMS.spread;
-
-  canvasContext.beginPath();
-
-  // pour chaque frequence
+  // pour chaque frequence 
   for (let i = 0; i < zoomedFrequencyBandLength / 2; i++) {
     // on déclare l'amplitude avec le analyserBuffer (auquel on rajoute 100 pour le cercle)
-    // amplitude -> on multiplie tout par le facteur d'echelle
-    const amplitude =  analyserBuffer[i] * PARAMS.amplitude;
+    const amplitude =  analyserBuffer[i];
     // normalized par rapport au dernier bucket pour finir le cercle
     const normalizedFreqBand = i / zoomedFrequencyBandLength * 2;
-    // spin -> on ajoute a l'angle un petit decalage qui grandit a chaque frame
-    // * Math.PI / 180 parce que spin est en degres et Math.cos attend des radians
-    const angle = normalizedFreqBand * Math.PI * 2 + frame * PARAMS.spin * Math.PI / 180;
     // placer les points de la ligne sur le cercle
-    // jitter -> Math.random() donne 0 a 1, on retire 0.5 pour le recentrer sur -0.5 a +0.5, sinon le decalage partirait toujours dans le meme sens
-    const x = offset1 + Math.cos(angle) * amplitude + w / 2 + (Math.random() - 0.5) * PARAMS.jitter;
-    const y = Math.sin(angle) * amplitude + h / 2 + (Math.random() - 0.5) * PARAMS.jitter;
+    const x = -500 + Math.cos(normalizedFreqBand * Math.PI * 2) * amplitude + w / 2;
+    const y = Math.sin(normalizedFreqBand * Math.PI * 2) * amplitude + h / 2;
 
     if (i === 0) {
       canvasContext.moveTo(x, y);
@@ -180,25 +114,16 @@ function draw() {
   }
 
   canvasContext.lineTo(initX, initY);
-
-  // fill -> remplissage uni
-  if (PARAMS.fill) {
-    canvasContext.fillStyle = PARAMS.fillColor;
-    canvasContext.fill();
-  }
-
   canvasContext.stroke();
-
-  const offset2 = 0;
-
   canvasContext.beginPath();
 
+   x = 0;
+
   for (let i = zoomedFrequencyBandLength / 2; i < zoomedFrequencyBandLength; i++) {
-    const amplitude =   (110 + analyserBuffer[i]) * PARAMS.amplitude;
+    const amplitude =   110 + analyserBuffer[i];
     const normalizedFreqBand = i / zoomedFrequencyBandLength * 2;
-    const angle = normalizedFreqBand * Math.PI * 2 + frame * PARAMS.spin * Math.PI / 180;
-    const x = offset2 + Math.cos(angle) * amplitude + w / 2 + (Math.random() - 0.5) * PARAMS.jitter;
-    const y = Math.sin(angle) * amplitude + h / 2 + (Math.random() - 0.5) * PARAMS.jitter;
+    const x = 0 + Math.cos(normalizedFreqBand * Math.PI * 2) * amplitude + w / 2;
+    const y = Math.sin(normalizedFreqBand * Math.PI * 2) * amplitude + h / 2;
 
     if (i === zoomedFrequencyBandLength / 2) {
       canvasContext.moveTo(x, y);
@@ -210,25 +135,16 @@ function draw() {
   }
 
   canvasContext.lineTo(initX, initY);
-
-  if (PARAMS.fill) {
-    canvasContext.fillStyle = PARAMS.fillColor;
-    canvasContext.fill();
-  }
-
   canvasContext.stroke();
+    canvasContext.beginPath();
 
+    x = 0;
 
-  const offset3 = PARAMS.spread;
-
-  canvasContext.beginPath();
-
-  for (let i = zoomedFrequencyBandLength / 4; i < zoomedFrequencyBandLength; i++) {
-    const amplitude = analyserBuffer[i] * PARAMS.amplitude;
+    for (let i = zoomedFrequencyBandLength / 4; i < zoomedFrequencyBandLength; i++) {
+    const amplitude = analyserBuffer[i];
     const normalizedFreqBand = i / zoomedFrequencyBandLength * 2;
-    const angle = normalizedFreqBand * Math.PI * 2 + frame * PARAMS.spin * Math.PI / 180;
-    const x = offset3 + Math.cos(angle) * amplitude + w / 2 + (Math.random() - 0.5) * PARAMS.jitter;
-    const y = Math.sin(angle) * amplitude + h / 2 + (Math.random() - 0.5) * PARAMS.jitter;
+    const x = 500 + Math.cos(normalizedFreqBand * Math.PI * 2) * amplitude + w / 2;
+    const y = Math.sin(normalizedFreqBand * Math.PI * 2) * amplitude + h / 2;
 
     if (i === zoomedFrequencyBandLength / 4) {
       canvasContext.moveTo(x, y);
@@ -240,26 +156,20 @@ function draw() {
   }
 
   canvasContext.lineTo(initX, initY);
-
-  if (PARAMS.fill) {
-    canvasContext.fillStyle = PARAMS.fillColor;
-    canvasContext.fill();
-  }
-
   canvasContext.stroke();
 }
 
 
 function resize() {
-  const devicePixelRatio = window.devicePixelRatio || 1;
+  const dpr = window.devicePixelRatio || 1;
 
-  canvas.width = window.innerWidth * devicePixelRatio;
-  canvas.height = window.innerHeight * devicePixelRatio;
+  canvas.width = window.innerWidth * dpr;
+  canvas.height = window.innerHeight * dpr;
 
   canvas.style.width = window.innerWidth + 'px';
   canvas.style.height = window.innerHeight + 'px';
 
-  canvasContext.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+  canvasContext.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 
 button.addEventListener("click", () => {
