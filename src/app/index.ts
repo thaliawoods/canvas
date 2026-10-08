@@ -72,13 +72,18 @@ function createContext() {
 function draw() {
   requestAnimationFrame(draw);
 
+
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+
   // const [max, min] = logFrequencyData();
 
   analyser.getByteFrequencyData(analyserBuffer as Uint8Array<ArrayBuffer>);
   analyser.getByteTimeDomainData(timeData as Uint8Array<ArrayBuffer>);
 
   canvasContext.fillStyle = PARAMS.theme === 'dark' ? 'rgb(60, 58, 58)' : 'rgb(250, 246, 246)';
-  canvasContext.fillRect(0, 0, canvas.width, canvas.height);
+
+  canvasContext.fillRect(0, 0, w, h);
 
   canvasContext.lineWidth = 1;
   canvasContext.strokeStyle = PARAMS.color;
@@ -96,8 +101,8 @@ function draw() {
     // normalized par rapport au dernier bucket pour finir le cercle
     const normalizedFreqBand = i / zoomedFrequencyBandLength * 2;
     // placer les points de la ligne sur le cercle
-    const x = -500 + Math.cos(normalizedFreqBand * Math.PI * 2) * amplitude + canvas.width / 2;
-    const y = Math.sin(normalizedFreqBand * Math.PI * 2) * amplitude + canvas.height / 2;
+    const x = -500 + Math.cos(normalizedFreqBand * Math.PI * 2) * amplitude + w / 2;
+    const y = Math.sin(normalizedFreqBand * Math.PI * 2) * amplitude + h / 2;
 
     if (i === 0) {
       canvasContext.moveTo(x, y);
@@ -117,8 +122,8 @@ function draw() {
   for (let i = zoomedFrequencyBandLength / 2; i < zoomedFrequencyBandLength; i++) {
     const amplitude =   110 + analyserBuffer[i];
     const normalizedFreqBand = i / zoomedFrequencyBandLength * 2;
-    const x = 0 + Math.cos(normalizedFreqBand * Math.PI * 2) * amplitude + canvas.width / 2;
-    const y = Math.sin(normalizedFreqBand * Math.PI * 2) * amplitude + canvas.height / 2;
+    const x = 0 + Math.cos(normalizedFreqBand * Math.PI * 2) * amplitude + w / 2;
+    const y = Math.sin(normalizedFreqBand * Math.PI * 2) * amplitude + h / 2;
 
     if (i === zoomedFrequencyBandLength / 2) {
       canvasContext.moveTo(x, y);
@@ -138,10 +143,10 @@ function draw() {
     for (let i = zoomedFrequencyBandLength / 4; i < zoomedFrequencyBandLength; i++) {
     const amplitude = analyserBuffer[i];
     const normalizedFreqBand = i / zoomedFrequencyBandLength * 2;
-    const x = 500 + Math.cos(normalizedFreqBand * Math.PI * 2) * amplitude + canvas.width / 2;
-    const y = Math.sin(normalizedFreqBand * Math.PI * 2) * amplitude + canvas.height / 2;
+    const x = 500 + Math.cos(normalizedFreqBand * Math.PI * 2) * amplitude + w / 2;
+    const y = Math.sin(normalizedFreqBand * Math.PI * 2) * amplitude + h / 2;
 
-    if (i === zoomedFrequencyBandLength / 2) {
+    if (i === zoomedFrequencyBandLength / 4) {
       canvasContext.moveTo(x, y);
       initX = x;
       initY = y;
@@ -156,15 +161,22 @@ function draw() {
 
 
 function resize() {
-  canvas.width = window.innerWidth
-  canvas.height = window.innerHeight
+  const dpr = window.devicePixelRatio || 1;
+
+  canvas.width = window.innerWidth * dpr;
+  canvas.height = window.innerHeight * dpr;
+
+  canvas.style.width = window.innerWidth + 'px';
+  canvas.style.height = window.innerHeight + 'px';
+
+  canvasContext.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 
 button.addEventListener("click", () => {
   if (!playing) {
     createContext();
-    draw();
     resize();
+    draw();
   }
 
   if (button.dataset.playing === "false") {

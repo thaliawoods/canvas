@@ -1,7 +1,50 @@
-:root {
-  font-family: sans-serif;
-  font-size: 16px;
+@font-face {
+  font-family: 'Josafronde';
+  src:
+    url('./assets/fonts/Josafronde-Regular.woff2') format('woff2'),
+    url('./assets/fonts/Josafronde-Regular.woff') format('woff');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
 }
+
+@font-face {
+  font-family: 'EnclavAcadam-Regular';
+  src:
+    url('./assets/fonts/EnclavAcadam-Regular.woff2') format('woff2'),
+    url('./assets/fonts/EnclavAcadam-Regular.woff') format('woff');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 body {
-  margin: 0;  
+  margin: 0;
+  background: rgb(60, 58, 58);
+}
+
+canvas {
+  position: fixed;
+  inset: 0;
+}
+
+button {
+    /* font-family: 'Josafronde', sans-serif; */
+  font-family: 'EnclavAcadam-Regular', sans-serif;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: none;
+  border: none;
+  color: #fff;
+  font-size: 2rem;
+  cursor: pointer;
+  opacity: 1;
+  transition: opacity 0.6s;
+}
+
+button[data-playing="true"] {
+  opacity: 0;
+  pointer-events: none;
 }
