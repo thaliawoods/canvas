@@ -20,10 +20,17 @@
 
 body {
   margin: 0;
-  background: rgb(60, 58, 58);
+  --background: rgb(60, 58, 58);
+  --text: #fff;
+  background: var(--background);
 }
 
-canvas {
+body[data-theme="light"] {
+  --background: rgb(250, 246, 246);
+  --text: #000000;
+}
+
+#canvas {
   position: fixed;
   inset: 0;
 }
@@ -37,7 +44,7 @@ button {
   transform: translate(-50%, -50%);
   background: none;
   border: none;
-  color: #fff;
+  color: var(--text);
   font-size: 4rem;
   cursor: pointer;
   opacity: 1;
