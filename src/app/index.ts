@@ -363,7 +363,7 @@ function draw() {
 
   canvasContext.fillRect(0, 0, canvasWidth, canvasHeight);
 
-  // le trait s'affine quand les aigus brillent
+  // le trait s'affine quand les aigus 
   canvasContext.lineWidth = Math.max(
     0.2,
     LINE_WIDTH * (1 - AUDIO.trebleLevel * MUSIC.thinFromTreble),
