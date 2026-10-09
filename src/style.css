@@ -33,25 +33,127 @@ body[data-theme="light"] {
 #canvas {
   position: fixed;
   inset: 0;
+  transition: opacity 0.6s;
 }
 
-button {
-    /* font-family: 'Josafronde', sans-serif; */
-  font-family: 'EnclavAcadam-Regular', sans-serif;
+body[data-view="intro"] #canvas {
+  opacity: 0;
+}
+
+#intro {
   position: fixed;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  background: none;
-  border: none;
-  color: var(--text);
-  font-size: 4rem;
-  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2rem;
   opacity: 1;
   transition: opacity 0.6s;
 }
 
-button[data-playing="true"] {
+body[data-view="canvas"] #intro {
   opacity: 0;
   pointer-events: none;
+}
+
+#intro-title {
+  font-family: 'EnclavAcadam-Regular', sans-serif;
+  color: var(--text);
+  font-size: 4rem;
+  margin: 0;
+}
+
+#tracks {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+#tracks button {
+    /* font-family: 'Josafronde', sans-serif; */
+  font-family: 'EnclavAcadam-Regular', sans-serif;
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 1.5rem;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.3s;
+}
+
+#tracks button:hover {
+  opacity: 1;
+}
+
+#return {
+  font-family: 'EnclavAcadam-Regular', sans-serif;
+  position: fixed;
+  top: 2rem;
+  left: 2rem;
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 1.25rem;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.3s;
+}
+
+#return:hover {
+  opacity: 1;
+}
+
+body[data-view="intro"] #return {
+  opacity: 0;
+  pointer-events: none;
+}
+
+#frame {
+  position: fixed;
+  inset: 2.5rem;
+  transition: opacity 0.6s;
+  pointer-events: none;
+}
+
+.corner {
+  position: absolute;
+  width: 12rem;
+  aspect-ratio: 513 / 516;
+  background-color: var(--text);
+  -webkit-mask-image: url('./assets/images/corner-mask.png');
+  mask-image: url('./assets/images/corner-mask.png');
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+}
+
+.corner--bl {
+  bottom: 0;
+  left: 0;
+}
+
+.corner--br {
+  bottom: 0;
+  right: 0;
+  transform: scaleX(-1);
+}
+
+.corner--tl {
+  top: 0;
+  left: 0;
+  transform: scaleY(-1);
+}
+
+.corner--tr {
+  top: 0;
+  right: 0;
+  transform: scale(-1, -1);
+}
+
+body[data-view="canvas"] #frame {
+  opacity: 0;
 }

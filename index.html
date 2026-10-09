@@ -7,17 +7,24 @@
     <link rel="stylesheet" href="/src/style.css" />
 
   </head>
-  <body>
+  <body data-view="intro">
     <div id="app"></div>
     <script type="module" src="/src/app/index.ts"></script>
     <canvas id="canvas"></canvas>
     <audio></audio>
-    <div id="intro" data-playing="false">
+    <div id="intro">
       <p id="intro-title">choose your music</p>
       <div id="tracks">
         <button data-src="/src/assets/audios/audio.mp3">Special Request - Spectral Frequency</button>
         <button data-src="/src/assets/audios/audio2.mp3">Aphex Twin - 14th</button>
       </div>
+    </div>
+    <button id="return">&#8592; return</button>
+    <div id="frame">
+      <span class="corner corner--tl"></span>
+      <span class="corner corner--tr"></span>
+      <span class="corner corner--bl"></span>
+      <span class="corner corner--br"></span>
     </div>
   </body>
 </html>
