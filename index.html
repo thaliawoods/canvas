@@ -11,9 +11,13 @@
     <div id="app"></div>
     <script type="module" src="/src/app/index.ts"></script>
     <canvas id="canvas"></canvas>
-    <audio src="/src/assets/audios/audio2.mp3"></audio>
-    <button data-playing="false" role="switch" aria-checked="false">
-  <span>E n t e r</span>
-</button>
+    <audio></audio>
+    <div id="intro" data-playing="false">
+      <p id="intro-title">choose your music</p>
+      <div id="tracks">
+        <button data-src="/src/assets/audios/audio.mp3">Special Request - Spectral Frequency</button>
+        <button data-src="/src/assets/audios/audio2.mp3">Aphex Twin - 14th</button>
+      </div>
+    </div>
   </body>
 </html>
