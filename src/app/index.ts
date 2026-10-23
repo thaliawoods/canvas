@@ -181,6 +181,24 @@ export type Target = typeof TARGET;
 // vitesse du glissement -> 0.01 c'est tres lent et 0.3 presque instantane
 const SMOOTHING = 0.04;
 
+// la couleur du fond vit dans le css. on la lit la bas au lieu de la recopier
+// ici : le voile du canvas doit etre exactement celle du body, sinon on voit
+// la teinte sauter au passage de l'accueil au dessin
+let backgroundRgb = "246, 249, 251";
+let lastTheme = "";
+
+function readBackground() {
+  const value = getComputedStyle(document.body)
+    .getPropertyValue("--background")
+    .trim();
+
+  const numbers = value.match(/[\d.]+/g);
+
+  if (numbers && numbers.length >= 3) {
+    backgroundRgb = numbers.slice(0, 3).join(", ");
+  }
+}
+
 const PALETTE_LIGHT = [
   // '#7a1f1f', 
   // '#ba2525', 
@@ -442,12 +460,16 @@ function draw() {
   const maxBottomLeft = maxRadiusAt(middleX - cornerSpread, bottomY);
   const maxBottomRight = maxRadiusAt(middleX + cornerSpread, bottomY);
 
+  // on relit la couleur seulement quand le theme bascule : getComputedStyle
+  // force un recalcul de style, trop couteux pour 60 fois par seconde
+  if (PARAMS.theme !== lastTheme) {
+    lastTheme = PARAMS.theme;
+    readBackground();
+  }
+
   // on efface jamais vraiment, on pose un voile de la couleur du fond.
   // trail a 1 = effacement total donc pas de trainee, 0.8 = trainee courte
-  canvasContext.fillStyle =
-    PARAMS.theme === "dark"
-      ? `rgba(60, 58, 58, ${PARAMS.trail})`
-      : `rgba(250, 246, 246, ${PARAMS.trail})`;
+  canvasContext.fillStyle = `rgba(${backgroundRgb}, ${PARAMS.trail})`;
 
   canvasContext.fillRect(0, 0, canvasWidth, canvasHeight);
 

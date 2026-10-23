@@ -27,7 +27,7 @@ body {
 }
 
 body[data-theme="light"] {
-  --background: rgb(250, 246, 246);
+  --background: rgb(246, 249, 251);
   --text: #000000;
 }
 
