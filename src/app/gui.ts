@@ -10,9 +10,9 @@ export function createGUI(
   MUSIC: {bassPunch: number; shapeContrast: number; thinFromTreble: number},
   SPIN_BURST: {strength: number; decay: number; max: number; cooldown: number},
 ) {
-  const pane = new Pane({title: 'reglages'});
+  const pane = new Pane({title: 'settings'});
 
-  const folder = pane.addFolder({title: 'reglages', expanded: false});
+  const folder = pane.addFolder({title: 'settings', expanded: false});
 
   folder.addBinding(
     PARAMS, 'theme',
@@ -33,7 +33,7 @@ export function createGUI(
   folder.addBinding(TARGET, 'smallScale', {min: 0.3, max: 2, step: 0.05});
 
 
-  const rythmeFolder = pane.addFolder({title: 'rythme', expanded: false});
+  const rythmeFolder = pane.addFolder({title: 'rhythm', expanded: false});
 
   // a couper pour que les sliders du dessus tiennent 
   rythmeFolder.addBinding(AUTO, 'autoLooks');
@@ -62,6 +62,20 @@ export function createGUI(
 
   rythmeFolder.addBinding(DELAYS, 'look', {min: 0.3, max: 10, step: 0.1, label: 'lookDelay'});
   rythmeFolder.addBinding(DELAYS, 'color', {min: 0.3, max: 10, step: 0.1, label: 'colorDelay'});
+
+  // sur un petit ecran le panneau couvre le dessin, donc il part cache.
+  // la hauteur compte autant que la largeur : un telephone couche fait
+  // 844 de large, il passait donc au travers d'un test sur la largeur seule
+  pane.hidden = window.matchMedia(
+    '(max-width: 700px), (max-height: 460px)',
+  ).matches;
+
+  const settingsToggle =
+    document.querySelector<HTMLButtonElement>('#settings-toggle');
+
+  settingsToggle?.addEventListener('click', () => {
+    pane.hidden = !pane.hidden;
+  });
 
   window.addEventListener('keydown', (keyEvent) => {
     if (document.activeElement instanceof HTMLInputElement) return;

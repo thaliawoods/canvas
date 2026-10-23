@@ -6,7 +6,31 @@ const canvas = document.querySelector("canvas")!;
 const returnButton = document.querySelector<HTMLButtonElement>("#return")!;
 const trackButtons =
   document.querySelectorAll<HTMLButtonElement>("#tracks button");
+const ownTrackInput =
+  document.querySelector<HTMLInputElement>("#bring-your-own input")!;
+const toggleButton = document.querySelector<HTMLButtonElement>("#toggle")!;
+const seekInput = document.querySelector<HTMLInputElement>("#seek")!;
+const timeLabel = document.querySelector<HTMLSpanElement>("#time")!;
 const canvasContext = canvas.getContext("2d")!;
+
+// la taille de la zone de dessin, mise a jour par resize()
+// on les garde ici plutot que de lire window.innerWidth dans draw : sur mobile
+// la barre d'url qui se retracte change innerHeight en plein milieu d'une frame
+let viewWidth = 0;
+let viewHeight = 0;
+
+// tout le dessin a ete cale a la main sur un ecran de 900 de haut, donc on compare a ca
+const REFERENCE_SIZE = 900;
+
+// la taille de l'ecran par rapport a la reference, sans rien d'autre.
+// on prend le plus petit cote sinon un ecran large et bas deborderait en hauteur.
+// c'est lui qui sert aux marges : elles suivent l'ecran, pas le dessin
+let viewScale = 1;
+
+// combien on agrandit le trace lui meme : la taille de l'ecran, plus le
+// rattrapage du nombre de cercles. separe de viewScale, sinon agrandir le
+// dessin agrandirait la marge, qui le re-retrecirait aussitot
+let screenScale = 1;
 
 let frequencyBuffer: Uint8Array;
 let frequencyBinCount: number;
@@ -56,6 +80,10 @@ export const MUSIC = {
 
 const LINE_WIDTH = 1.4;
 
+// la bande laissee libre en bas pour les commandes de lecture.
+// le dessin se recentre dans ce qui reste, sinon il parait pousse vers le bas
+const CONTROLS_SPACE = 72;
+
 // la valeur d'un bucket, exageree selon shapeContrast
 function shapedLevel(binIndex: number): number {
   return Math.pow(frequencyBuffer[binIndex] / 255, MUSIC.shapeContrast) * 255;
@@ -70,19 +98,57 @@ function fitsOnScreen(
   centerY: number,
   radius: number,
 ): boolean {
+  // la marge aussi doit retrecir, sinon elle mange tout l'ecran sur un telephone
+  const margin = SCREEN_MARGIN * viewScale;
+
   return (
-    centerX - radius >= SCREEN_MARGIN &&
-    centerX + radius <= window.innerWidth - SCREEN_MARGIN &&
-    centerY - radius >= SCREEN_MARGIN &&
-    centerY + radius <= window.innerHeight - SCREEN_MARGIN
+    centerX - radius >= margin &&
+    centerX + radius <= viewWidth - margin &&
+    centerY - radius >= margin &&
+    centerY + radius <= viewHeight - margin
   );
 }
 
-// le nombre de cercles depend de la place (3 ou 7)
+// quand une frequence tape fort le point part tres loin et sort de l'ecran.
+// tanh ecrase les grandes valeurs sans toucher aux petites : sous le plafond
+// le trait garde sa forme exacte, au dessus il sature au lieu de deborder.
+// c'est le principe d'un limiteur en audio, pas un ciseau qui coupe net
+function softCap(value: number, maximum: number): number {
+  return maximum * Math.tanh(value / maximum);
+}
+
+// la place qui reste entre le centre d'un cercle et le bord le plus proche
+function maxRadiusAt(centerX: number, centerY: number): number {
+  const margin = SCREEN_MARGIN * viewScale;
+
+  return Math.max(
+    10,
+    Math.min(
+      centerX - margin,
+      viewWidth - margin - centerX,
+      centerY - margin,
+      viewHeight - margin - centerY,
+    ),
+  );
+}
+
+// le nombre de cercles depend de la place (1, 3 ou 7)
+// en dessous de 700 un seul gros cercle se lit mieux que trois minuscules
 function countCircles(screenWidth: number): number {
+  if (screenWidth < 700) return 1;
   if (screenWidth < 1100) return 3;
 
   return 7;
+}
+
+// sept cercles se partagent la largeur, donc chacun doit rester petit.
+// quand il n'en reste qu'un il a toute la place pour lui, et une echelle
+// calculee seulement sur la taille de l'ecran le laisserait ridiculement maigre
+function layoutBoost(screenWidth: number): number {
+  if (screenWidth < 700) return 1.9;
+  if (screenWidth < 1100) return 1.35;
+
+  return 1;
 }
 
 export const PARAMS = {
@@ -317,32 +383,45 @@ function draw() {
   PARAMS.color = palette[colorIndex % palette.length];
 
   // les graves font gonfler tout le dessin
+  // screenScale est ici parce que chaque point du dessin passe par amplitudeNow :
+  // le mettre a un seul endroit suffit a mettre tout le trace a l'echelle
   const amplitudeNow =
-    PARAMS.amplitude * (1 + AUDIO.bassLevel * MUSIC.bassPunch);
+    PARAMS.amplitude * (1 + AUDIO.bassLevel * MUSIC.bassPunch) * screenScale;
 
-  const canvasWidth = window.innerWidth;
-  const canvasHeight = window.innerHeight;
+  // le tremblement et les pointilles sont en pixels, donc ils retrecissent aussi
+  const jitterNow = PARAMS.jitter * screenScale;
+  const dashNow = PARAMS.dash * screenScale;
+
+  const canvasWidth = viewWidth;
+  const canvasHeight = viewHeight;
 
   // le nombre -> plafonne par la place dispo
   const circleCount = Math.min(countCircles(canvasWidth), wantedCircles);
 
   // les positions et les rayons de reference, pour savoir qui tient l'ecartement reel de chaque groupe
-  const middleSpread = PARAMS.spread * MIDDLE_SPREAD_FACTOR;
-  const cornerSpread = PARAMS.spread * CORNER_SPREAD_FACTOR;
+  const middleSpread = PARAMS.spread * MIDDLE_SPREAD_FACTOR * screenScale;
+  const cornerSpread = PARAMS.spread * CORNER_SPREAD_FACTOR * screenScale;
 
   const middleX = canvasWidth / 2;
-  const middleY = canvasHeight / 2;
+  // pas canvasHeight / 2 : on centre sur la hauteur moins la bande des commandes
+  const middleY = (canvasHeight - CONTROLS_SPACE) / 2;
   const topY = middleY - canvasHeight * TOP_OFFSET_RATIO * PARAMS.offsetY;
   const bottomY = middleY + canvasHeight * BOTTOM_OFFSET_RATIO * PARAMS.offsetY;
 
-  const plainRadius = 255 * PARAMS.amplitude * RADIUS_MARGIN;
-  const centerRadius = (110 + 255) * PARAMS.amplitude * RADIUS_MARGIN;
+  const plainRadius = 255 * PARAMS.amplitude * RADIUS_MARGIN * screenScale;
+  const centerRadius =
+    (110 + 255) * PARAMS.amplitude * RADIUS_MARGIN * screenScale;
   const topRadius = plainRadius * TOP_SCALE * PARAMS.smallScale;
   const bottomRadius = plainRadius * BOTTOM_SCALE * PARAMS.smallScale;
 
-  const showLeft = fitsOnScreen(middleX - middleSpread, middleY, plainRadius);
-  const showCenter = fitsOnScreen(middleX, middleY, centerRadius);
-  const showRight = fitsOnScreen(middleX + middleSpread, middleY, plainRadius);
+  const showLeft =
+    circleCount >= 3 && fitsOnScreen(middleX - middleSpread, middleY, plainRadius);
+  // quand le centre est le seul cercle on ne le filtre pas : sur certaines
+  // ambiances il ne passerait pas le test et l'ecran se retrouverait vide
+  const showCenter =
+    circleCount === 1 || fitsOnScreen(middleX, middleY, centerRadius);
+  const showRight =
+    circleCount >= 3 && fitsOnScreen(middleX + middleSpread, middleY, plainRadius);
   const showTopLeft =
     circleCount >= 5 && fitsOnScreen(middleX - cornerSpread, topY, topRadius);
   const showTopRight =
@@ -353,6 +432,15 @@ function draw() {
   const showBottomRight =
     circleCount >= 7 &&
     fitsOnScreen(middleX + cornerSpread, bottomY, bottomRadius);
+
+  // chaque cercle a son propre plafond : celui du bord vers lequel il penche
+  const maxLeft = maxRadiusAt(middleX - middleSpread, middleY);
+  const maxCenter = maxRadiusAt(middleX, middleY);
+  const maxRight = maxRadiusAt(middleX + middleSpread, middleY);
+  const maxTopLeft = maxRadiusAt(middleX - cornerSpread, topY);
+  const maxTopRight = maxRadiusAt(middleX + cornerSpread, topY);
+  const maxBottomLeft = maxRadiusAt(middleX - cornerSpread, bottomY);
+  const maxBottomRight = maxRadiusAt(middleX + cornerSpread, bottomY);
 
   // on efface jamais vraiment, on pose un voile de la couleur du fond.
   // trail a 1 = effacement total donc pas de trainee, 0.8 = trainee courte
@@ -369,7 +457,7 @@ function draw() {
     LINE_WIDTH * (1 - AUDIO.trebleLevel * MUSIC.thinFromTreble),
   );
   canvasContext.strokeStyle = PARAMS.color;
-  canvasContext.setLineDash(PARAMS.dash > 1 ? [PARAMS.dash, PARAMS.dash] : []);
+  canvasContext.setLineDash(dashNow > 1 ? [dashNow, dashNow] : []);
 
   // on / 4 parce que y'a pleins de frequences inutilisees, elles sont toutes sur le debut du bucket
   const zoomedFrequencyBandLength = frequencyBinCount / 16;
@@ -391,7 +479,10 @@ function draw() {
     ) {
       // on déclare l'amplitude avec le analyserBuffer (auquel on rajoute 100 pour le cercle)
       // amplitude -> on multiplie tout par le facteur d'echelle
-      const amplitude = shapedLevel(frequencyIndex) * amplitudeNow;
+      const amplitude = softCap(
+        shapedLevel(frequencyIndex) * amplitudeNow,
+        maxLeft,
+      );
       // normalized par rapport au dernier bucket pour finir le cercle
       const normalizedFrequencyBand =
         (frequencyIndex / zoomedFrequencyBandLength) * 2;
@@ -404,11 +495,11 @@ function draw() {
         offset1 +
         Math.cos(angle) * amplitude +
         canvasWidth / 2 +
-        (Math.random() - 0.5) * PARAMS.jitter;
+        (Math.random() - 0.5) * jitterNow;
       const pointY =
         Math.sin(angle) * amplitude +
-        canvasHeight / 2 +
-        (Math.random() - 0.5) * PARAMS.jitter;
+        middleY +
+        (Math.random() - 0.5) * jitterNow;
 
       if (frequencyIndex === 0) {
         canvasContext.moveTo(pointX, pointY);
@@ -435,7 +526,10 @@ function draw() {
       frequencyIndex < zoomedFrequencyBandLength;
       frequencyIndex++
     ) {
-      const amplitude = (110 + shapedLevel(frequencyIndex)) * amplitudeNow;
+      const amplitude = softCap(
+        (110 + shapedLevel(frequencyIndex)) * amplitudeNow,
+        maxCenter,
+      );
       const normalizedFrequencyBand =
         (frequencyIndex / zoomedFrequencyBandLength) * 2;
       const angle = normalizedFrequencyBand * Math.PI * 2 + rotation;
@@ -443,11 +537,11 @@ function draw() {
         offset2 +
         Math.cos(angle) * amplitude +
         canvasWidth / 2 +
-        (Math.random() - 0.5) * PARAMS.jitter;
+        (Math.random() - 0.5) * jitterNow;
       const pointY =
         Math.sin(angle) * amplitude +
-        canvasHeight / 2 +
-        (Math.random() - 0.5) * PARAMS.jitter;
+        middleY +
+        (Math.random() - 0.5) * jitterNow;
 
       if (frequencyIndex === zoomedFrequencyBandLength / 2) {
         canvasContext.moveTo(pointX, pointY);
@@ -472,19 +566,21 @@ function draw() {
       frequencyIndex < zoomedFrequencyBandLength;
       frequencyIndex++
     ) {
-      const amplitude =
-        shapedLevel(frequencyIndex) * amplitudeNow * CENTER_INNER_SCALE;
+      const amplitude = softCap(
+        shapedLevel(frequencyIndex) * amplitudeNow * CENTER_INNER_SCALE,
+        maxCenter,
+      );
       const normalizedFrequencyBand =
         (frequencyIndex / zoomedFrequencyBandLength) * 2;
       const angle = normalizedFrequencyBand * Math.PI * 2 + rotation;
       const pointX =
         Math.cos(angle) * amplitude +
         canvasWidth / 2 +
-        (Math.random() - 0.5) * PARAMS.jitter;
+        (Math.random() - 0.5) * jitterNow;
       const pointY =
         Math.sin(angle) * amplitude +
-        canvasHeight / 2 +
-        (Math.random() - 0.5) * PARAMS.jitter;
+        middleY +
+        (Math.random() - 0.5) * jitterNow;
 
       if (frequencyIndex === zoomedFrequencyBandLength / 2) {
         canvasContext.moveTo(pointX, pointY);
@@ -514,7 +610,10 @@ function draw() {
       frequencyIndex < zoomedFrequencyBandLength;
       frequencyIndex++
     ) {
-      const amplitude = shapedLevel(frequencyIndex) * amplitudeNow;
+      const amplitude = softCap(
+        shapedLevel(frequencyIndex) * amplitudeNow,
+        maxRight,
+      );
       const normalizedFrequencyBand =
         (frequencyIndex - thirdCircleStart) / thirdCircleSpan;
       const angle = normalizedFrequencyBand * Math.PI * 2 + rotation;
@@ -522,11 +621,11 @@ function draw() {
         offset3 +
         Math.cos(angle) * amplitude +
         canvasWidth / 2 +
-        (Math.random() - 0.5) * PARAMS.jitter;
+        (Math.random() - 0.5) * jitterNow;
       const pointY =
         Math.sin(angle) * amplitude +
-        canvasHeight / 2 +
-        (Math.random() - 0.5) * PARAMS.jitter;
+        middleY +
+        (Math.random() - 0.5) * jitterNow;
 
       if (frequencyIndex === thirdCircleStart) {
         canvasContext.moveTo(pointX, pointY);
@@ -554,23 +653,22 @@ function draw() {
       frequencyIndex < topLeftSpan;
       frequencyIndex++
     ) {
-      const amplitude =
-        shapedLevel(frequencyIndex) *
-        amplitudeNow *
-        TOP_SCALE *
-        PARAMS.smallScale;
+      const amplitude = softCap(
+        shapedLevel(frequencyIndex) * amplitudeNow * TOP_SCALE * PARAMS.smallScale,
+        maxTopLeft,
+      );
       const normalizedFrequencyBand = frequencyIndex / topLeftSpan;
       const angle = normalizedFrequencyBand * Math.PI * 2 + rotation;
       const pointX =
         offset4 +
         Math.cos(angle) * amplitude +
         canvasWidth / 2 +
-        (Math.random() - 0.5) * PARAMS.jitter;
+        (Math.random() - 0.5) * jitterNow;
       const pointY =
         Math.sin(angle) * amplitude +
-        canvasHeight / 2 -
+        middleY -
         canvasHeight * TOP_OFFSET_RATIO * PARAMS.offsetY +
-        (Math.random() - 0.5) * PARAMS.jitter;
+        (Math.random() - 0.5) * jitterNow;
 
       if (frequencyIndex === 0) {
         canvasContext.moveTo(pointX, pointY);
@@ -599,11 +697,10 @@ function draw() {
       frequencyIndex < topRightStart + topRightSpan;
       frequencyIndex++
     ) {
-      const amplitude =
-        shapedLevel(frequencyIndex) *
-        amplitudeNow *
-        TOP_SCALE *
-        PARAMS.smallScale;
+      const amplitude = softCap(
+        shapedLevel(frequencyIndex) * amplitudeNow * TOP_SCALE * PARAMS.smallScale,
+        maxTopRight,
+      );
       const normalizedFrequencyBand =
         (frequencyIndex - topRightStart) / topRightSpan;
       const angle = normalizedFrequencyBand * Math.PI * 2 + rotation;
@@ -611,12 +708,12 @@ function draw() {
         offset5 +
         Math.cos(angle) * amplitude +
         canvasWidth / 2 +
-        (Math.random() - 0.5) * PARAMS.jitter;
+        (Math.random() - 0.5) * jitterNow;
       const pointY =
         Math.sin(angle) * amplitude +
-        canvasHeight / 2 -
+        middleY -
         canvasHeight * TOP_OFFSET_RATIO * PARAMS.offsetY +
-        (Math.random() - 0.5) * PARAMS.jitter;
+        (Math.random() - 0.5) * jitterNow;
 
       if (frequencyIndex === topRightStart) {
         canvasContext.moveTo(pointX, pointY);
@@ -645,11 +742,10 @@ function draw() {
       frequencyIndex < bottomLeftStart + bottomLeftSpan;
       frequencyIndex++
     ) {
-      const amplitude =
-        shapedLevel(frequencyIndex) *
-        amplitudeNow *
-        BOTTOM_SCALE *
-        PARAMS.smallScale;
+      const amplitude = softCap(
+        shapedLevel(frequencyIndex) * amplitudeNow * BOTTOM_SCALE * PARAMS.smallScale,
+        maxBottomLeft,
+      );
       const normalizedFrequencyBand =
         (frequencyIndex - bottomLeftStart) / bottomLeftSpan;
       const angle = normalizedFrequencyBand * Math.PI * 2 + rotation;
@@ -657,12 +753,12 @@ function draw() {
         offset6 +
         Math.cos(angle) * amplitude +
         canvasWidth / 2 +
-        (Math.random() - 0.5) * PARAMS.jitter;
+        (Math.random() - 0.5) * jitterNow;
       const pointY =
         Math.sin(angle) * amplitude +
-        canvasHeight / 2 +
+        middleY +
         canvasHeight * BOTTOM_OFFSET_RATIO * PARAMS.offsetY +
-        (Math.random() - 0.5) * PARAMS.jitter;
+        (Math.random() - 0.5) * jitterNow;
 
       if (frequencyIndex === bottomLeftStart) {
         canvasContext.moveTo(pointX, pointY);
@@ -691,11 +787,10 @@ function draw() {
       frequencyIndex < zoomedFrequencyBandLength;
       frequencyIndex++
     ) {
-      const amplitude =
-        shapedLevel(frequencyIndex) *
-        amplitudeNow *
-        BOTTOM_SCALE *
-        PARAMS.smallScale;
+      const amplitude = softCap(
+        shapedLevel(frequencyIndex) * amplitudeNow * BOTTOM_SCALE * PARAMS.smallScale,
+        maxBottomRight,
+      );
       const normalizedFrequencyBand =
         (frequencyIndex - bottomRightStart) / bottomRightSpan;
       const angle = normalizedFrequencyBand * Math.PI * 2 + rotation;
@@ -703,12 +798,12 @@ function draw() {
         offset7 +
         Math.cos(angle) * amplitude +
         canvasWidth / 2 +
-        (Math.random() - 0.5) * PARAMS.jitter;
+        (Math.random() - 0.5) * jitterNow;
       const pointY =
         Math.sin(angle) * amplitude +
-        canvasHeight / 2 +
+        middleY +
         canvasHeight * BOTTOM_OFFSET_RATIO * PARAMS.offsetY +
-        (Math.random() - 0.5) * PARAMS.jitter;
+        (Math.random() - 0.5) * jitterNow;
 
       if (frequencyIndex === bottomRightStart) {
         canvasContext.moveTo(pointX, pointY);
@@ -728,40 +823,210 @@ function draw() {
 function resize() {
   const devicePixelRatio = window.devicePixelRatio || 1;
 
-  canvas.width = window.innerWidth * devicePixelRatio;
-  canvas.height = window.innerHeight * devicePixelRatio;
+  // le css place deja le canvas en plein ecran (position fixed, inset 0),
+  // donc on lit la taille qu'il lui a donnee au lieu de la refixer nous memes.
+  // ca evite la boucle avec le ResizeObserver et ca ignore la barre d'url mobile
+  viewWidth = canvas.clientWidth;
+  viewHeight = canvas.clientHeight;
 
-  canvas.style.width = window.innerWidth + "px";
-  canvas.style.height = window.innerHeight + "px";
+  // le canvas a deux tailles : celle qu'on voit, et son nombre de pixels reels.
+  // sur un ecran retina il en faut 2 ou 3 fois plus, sinon le trait de 1px bave
+  canvas.width = viewWidth * devicePixelRatio;
+  canvas.height = viewHeight * devicePixelRatio;
 
+  // changer canvas.width remet le contexte a zero, donc on repose la transformation
   canvasContext.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+
+  viewScale = Math.min(viewWidth, viewHeight) / REFERENCE_SIZE;
+  screenScale = viewScale * layoutBoost(viewWidth);
 }
+
+// resize ne partait qu'au clic sur un morceau : redimensionner la fenetre ou
+// tourner le telephone laissait le canvas a son ancienne taille.
+// l'observer se declenche aussi des qu'on observe, donc il fait le premier appel
+new ResizeObserver(resize).observe(canvas);
+
+// le meme chemin pour les trois morceaux et pour un fichier depose,
+// sinon la mise en route de l'analyseur serait ecrite deux fois
+function playTrack(src: string, chosen: HTMLElement) {
+  audioElement.src = src;
+
+  // le morceau d'avant arrete de clignoter si on change d'avis en cours de route
+  document
+    .querySelectorAll("[data-chosen]")
+    .forEach((element) => element.removeAttribute("data-chosen"));
+
+  chosen.dataset.chosen = "";
+  document.body.dataset.loading = "";
+
+  if (!playing) {
+    const audio = createAudio(audioElement);
+    frequencyBuffer = audio.frequencyBuffer;
+    frequencyBinCount = audio.frequencyBinCount;
+    playing = true;
+
+    resize();
+    startAnimation();
+    draw();
+  }
+
+  // play() rend une promesse qui peut etre refusee : safari demande parfois
+  // un geste de plus, et changer de morceau trop vite coupe le precedent.
+  // sans ce catch, le refus remonte en erreur dans la console
+  audioElement.play().catch((error: DOMException) => {
+    // on a change de morceau avant que celui la demarre : le suivant prend
+    // le relais, il n'y a rien a nettoyer
+    if (error.name === "AbortError") return;
+
+    // sinon le clignotement tournerait dans le vide
+    stopLoading();
+  });
+}
+
+// 83 secondes -> "1:23". le padStart met le zero des dizaines
+function formatTime(seconds: number): string {
+  if (!isFinite(seconds)) return "0:00";
+
+  const minutes = Math.floor(seconds / 60);
+  const rest = Math.floor(seconds % 60);
+
+  return minutes + ":" + String(rest).padStart(2, "0");
+}
+
+// vrai pendant qu'on tient le curseur : le temps du morceau continue
+// d'avancer, et sans ca il repousserait le curseur sous le doigt
+let scrubbing = false;
+
+function updateTime() {
+  const duration = audioElement.duration;
+
+  timeLabel.textContent =
+    formatTime(audioElement.currentTime) + " / " + formatTime(duration);
+
+  if (scrubbing || !isFinite(duration) || duration === 0) return;
+
+  seekInput.value = String((audioElement.currentTime / duration) * 1000);
+}
+
+toggleButton.addEventListener("click", () => {
+  if (audioElement.paused) {
+    audioElement.play();
+  } else {
+    audioElement.pause();
+  }
+});
+
+seekInput.addEventListener("pointerdown", () => {
+  scrubbing = true;
+});
+
+// pointerup part meme si le doigt a glisse hors de la barre
+window.addEventListener("pointerup", () => {
+  scrubbing = false;
+});
+
+// "input" se declenche pendant le glissement, "change" seulement a la fin :
+// on prend input pour que le son suive le doigt tout de suite
+seekInput.addEventListener("input", () => {
+  const duration = audioElement.duration;
+
+  if (!isFinite(duration) || duration === 0) return;
+
+  audioElement.currentTime = (Number(seekInput.value) / 1000) * duration;
+
+  updateTime();
+});
+
+audioElement.addEventListener("timeupdate", updateTime);
+audioElement.addEventListener("loadedmetadata", updateTime);
+
+// le picto du bouton suit l'etat reel du son, pas ce qu'on a demande :
+// si la lecture echoue, il ne faut pas afficher pause alors que rien ne joue
+audioElement.addEventListener("play", () => {
+  document.body.dataset.playing = "";
+});
+
+audioElement.addEventListener("pause", () => {
+  delete document.body.dataset.playing;
+});
+
+audioElement.addEventListener("ended", () => {
+  delete document.body.dataset.playing;
+});
+
+// le clignotement s'arrete et la liste des morceaux redevient cliquable
+function stopLoading() {
+  delete document.body.dataset.loading;
+
+  document
+    .querySelectorAll("[data-chosen]")
+    .forEach((element) => element.removeAttribute("data-chosen"));
+}
+
+// on ne bascule pas des le clic : un mp3 met plusieurs secondes a arriver
+// en 4g, et on regarderait un canvas vide pendant tout le telechargement.
+// "playing" ne part qu'au moment ou le son sort vraiment
+audioElement.addEventListener("playing", () => {
+  stopLoading();
+
+  document.body.dataset.view = "canvas";
+});
+
+// si le fichier n'arrive jamais, sans ca le morceau clignoterait sans fin
+// et les autres resteraient grises donc impossibles a choisir
+audioElement.addEventListener("error", stopLoading);
+audioElement.addEventListener("stalled", stopLoading);
 
 trackButtons.forEach((trackButton) => {
   trackButton.addEventListener("click", () => {
-    const src = trackButton.dataset.src!;
-
-    audioElement.src = src;
-
-    if (!playing) {
-      const audio = createAudio(audioElement);
-      frequencyBuffer = audio.frequencyBuffer;
-      frequencyBinCount = audio.frequencyBinCount;
-      playing = true;
-
-      resize();
-      startAnimation();
-      draw();
-    }
-
-    audioElement.play();
-
-    document.body.dataset.view = "canvas";
+    playTrack(trackButton.dataset.src!, trackButton);
   });
+});
+
+// l'adresse locale du fichier depose, gardee pour pouvoir la relacher
+let ownTrackUrl = "";
+
+ownTrackInput.addEventListener("change", () => {
+  const file = ownTrackInput.files?.[0];
+
+  if (!file) return;
+
+  // le fichier ne part sur aucun serveur : createObjectURL fabrique juste
+  // une adresse qui pointe vers la memoire du navigateur
+  if (ownTrackUrl) URL.revokeObjectURL(ownTrackUrl);
+
+  ownTrackUrl = URL.createObjectURL(file);
+
+  playTrack(ownTrackUrl, ownTrackInput.parentElement!);
 });
 
 returnButton.addEventListener("click", () => {
   document.body.dataset.view = "intro";
 
   audioElement.pause();
+
+  // sans ca, revenir en arriere pendant un chargement long laissait les
+  // autres morceaux grises et impossibles a cliquer : on restait bloque
+  stopLoading();
+});
+
+// barre d'espace pour mettre en pause, comme partout ailleurs.
+// on laisse tranquille les champs de saisie et les boutons, sinon la touche
+// rejouerait le bouton qui a le focus en plus de mettre en pause
+window.addEventListener("keydown", (keyEvent) => {
+  if (keyEvent.key !== " ") return;
+  if (document.body.dataset.view !== "canvas") return;
+
+  const focused = document.activeElement;
+
+  if (focused instanceof HTMLInputElement) return;
+  if (focused instanceof HTMLButtonElement) return;
+
+  keyEvent.preventDefault();
+
+  if (audioElement.paused) {
+    audioElement.play();
+  } else {
+    audioElement.pause();
+  }
 });

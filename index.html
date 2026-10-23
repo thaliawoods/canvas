@@ -3,12 +3,31 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>canvas</title>
+    <title>canvas-audio</title>
+    <meta
+      name="description"
+      content="Visualiseur audio dessiné au trait, en Canvas et Web Audio API."
+    />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="theme-color" content="#faf6f6" />
+
+    <!-- open graph : ce que linkedin lit quand on colle le lien.
+         sans ca il affiche l'url nue, sans vignette ni titre -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="canvas-audio" />
+    <meta
+      property="og:description"
+      content="Visualiseur audio dessiné au trait, en Canvas et Web Audio API."
+    />
+    <meta property="og:image" content="/apercu.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body data-view="intro">
     <div id="app"></div>
-    <script type="module" src="/src/app/index.ts"></script>
     <canvas id="canvas"></canvas>
     <audio></audio>
     <div id="intro">
@@ -28,14 +47,48 @@
         <button data-src="/audios/audio3.mp3">
           Backey - Bring it back
         </button>
+
+        <label id="bring-your-own">
+          <svg viewBox="0 0 24 26" aria-hidden="true">
+            <path d="M12 2.5v13" />
+            <path d="M7 8.1 12 2.5l5 5.6" />
+            <path d="M4 21.5h16" />
+            <path d="M4 19.8v3.4M20 19.8v3.4" />
+          </svg>
+          or bring your own
+          <input type="file" accept="audio/*" />
+        </label>
       </div>
     </div>
     <button id="return">&#8592; return</button>
+    <button id="settings-toggle">settings</button>
+
+    <div id="controls">
+      <button id="toggle" type="button" aria-label="play or pause">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path class="icon-play" d="M8.5 5.5 18 12 8.5 18.5Z" />
+          <path class="icon-pause" d="M9.5 5.5v13M14.5 5.5v13" />
+        </svg>
+      </button>
+
+      <input
+        id="seek"
+        type="range"
+        min="0"
+        max="1000"
+        step="1"
+        value="0"
+        aria-label="position in the track"
+      />
+
+      <span id="time">0:00 / 0:00</span>
+    </div>
     <div id="frame">
       <span class="corner corner--tl"></span>
       <span class="corner corner--tr"></span>
       <span class="corner corner--bl"></span>
       <span class="corner corner--br"></span>
     </div>
+    <script type="module" src="/src/app/index.ts"></script>
   </body>
 </html>
